@@ -136,64 +136,107 @@ function App() {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-
+    const dpr = window.devicePixelRatio || 1;
+  
     const rows = asciiGrid.length;
     const cols = asciiGrid[0].length;
+  
+    const charWidth = fontSize * 0.6;
+    const charHeight = fontSize;
 
-    canvas.width = cols * fontSize * 0.6;
-    canvas.height = rows * fontSize;
+    canvas.width = cols * charWidth * dpr;
+    canvas.height = rows * charHeight * dpr;
+    canvas.style.width = `${cols * charWidth}px`;
+    canvas.style.height = `${rows * charHeight}px`;
 
+    ctx.scale(dpr, dpr); // 💡 This makes drawing stay the same size, but higher quality
+  
     ctx.font = `${fontSize}px '${fontFamily}'`;
     ctx.textBaseline = 'top';
-
-    const draw = (hoverRow, hoverCol) => {
+  
+    let rippleRadius = 0;
+    let hoverRow = -100;
+    let hoverCol = -100;
+    let animationFrameId;
+  
+    const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+  
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const char = asciiGrid[r][c];
           const dist = Math.sqrt((r - hoverRow) ** 2 + (c - hoverCol) ** 2);
-          let opacity = 0.5;
+  
+          let opacity = 0.4;
           let bold = '';
-
-          if (dist <= 10) {
-            opacity = 1;
-            bold = 'bold';
-          } else if (dist <= 20) {
-            opacity = 0.8;
-            bold = 'bold';
-          } else if (dist <= 30) {
-            opacity = 0.6;
-          } else {
-            opacity = 0.4;
-          }          
-
+  
+          if (dist <= rippleRadius) {
+            if (dist <= 10) {
+              opacity = 1;
+              bold = 'bold';
+            } else if (dist <= 20) {
+              opacity = 0.8;
+              bold = 'bold';
+            } else if (dist <= 30) {
+              opacity = 0.6;
+            }
+          }
+  
           ctx.font = `${bold} ${fontSize}px '${fontFamily}'`;
           ctx.fillStyle = `rgba(255, 0, 122, ${opacity})`;
-          ctx.fillText(char, c * fontSize * 0.6, r * fontSize);
+          ctx.fillText(char, c * charWidth, r * charHeight);
         }
       }
+  
+      animationFrameId = requestAnimationFrame(draw);
     };
-
+  
+    const startRipple = () => {
+      rippleRadius = 0;
+  
+      const grow = () => {
+        rippleRadius += 1;
+        if (rippleRadius <= 40) {
+          setTimeout(grow, 20); // control speed here
+        }
+      };
+  
+      grow();
+    };
+  
     const handleMouseMove = (e) => {
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-
-      const col = Math.floor(x / (fontSize * 0.6));
-      const row = Math.floor(y / fontSize);
-      draw(row, col);
+  
+      const col = Math.floor(x / charWidth);
+      const row = Math.floor(y / charHeight);
+  
+      if (row !== hoverRow || col !== hoverCol) {
+        hoverRow = row;
+        hoverCol = col;
+        rippleRadius = 10; // Start size
+        startRipple();
+      }
     };
-
+  
+    const handleMouseLeave = () => {
+      hoverRow = -100;
+      hoverCol = -100;
+      rippleRadius = 0;
+    };
+  
     canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseleave', () => draw(-100, -100));
-
-    draw(-100, -100); // Initial render
-
+    canvas.addEventListener('mouseleave', handleMouseLeave);
+  
+    draw(); // Initial render
+  
     return () => {
+      cancelAnimationFrame(animationFrameId);
       canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, [asciiGrid]);
+  }, [asciiGrid]);  
 
   return (
     <div className="App">
